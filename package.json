@@ -1,0 +1,36 @@
+{
+  "name": "farewatch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram-бот мониторинга дешёвых авиабилетов (Travelpayouts Data API, Cloudflare Workers + D1)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm test",
+    "db:migrate:local": "wrangler d1 migrations apply farewatch --local",
+    "db:migrate:remote": "wrangler d1 migrations apply farewatch --remote",
+    "secrets:push": "tsx scripts/push-secrets.ts",
+    "set-webhook": "tsx scripts/set-webhook.ts",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "grammy": "^1.46.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@vitest/coverage-v8": "^5.0.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.143.0"
+  }
+}
