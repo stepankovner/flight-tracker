@@ -101,6 +101,9 @@ export async function runDaily(svc: Services): Promise<DailyReport> {
     `проверок: ${c.checks ?? 0}, тиков: ${c.ticks ?? 0}, уведомлений отправлено: ${c.tg_sent ?? 0}`,
   ];
   if ((c.rate_limited ?? 0) > 0) lines.push(`429 от Travelpayouts: ${c.rate_limited} раз`);
+  if ((c.tick_aborted ?? 0) > 0) {
+    lines.push(`⚠️ тиков, оборванных платформой (вероятно, лимит CPU): ${c.tick_aborted}. Если повторяется — см. README, раздел «Эксплуатация».`);
+  }
   const rl = kv.get('rate_limited_until');
   if (rl && Date.parse(rl) > now.getTime()) lines.push(`⚠️ пауза запросов до ${rl}`);
   if (report.expired.length) lines.push(`завершено по сроку: ${report.expired.map((id) => `#${id}`).join(', ')}`);

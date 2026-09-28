@@ -23,8 +23,8 @@ export const HELP_TEXT =
   'а авто-режим будет осторожным, пока не накопится история.\n' +
   `• ${DETECTOR_HELP}\n` +
   `• Повторно про тот же рейс пишу, только если цена упала ещё на ${Math.round(NOTIFY.REALERT_MIN_DROP_PCT * 100)}% и ${NOTIFY.REALERT_MIN_DROP_ABS} ₽.\n` +
-  `• Лимиты: до ${BOT.MAX_ACTIVE_WATCHES} активных наблюдений, до ${PLANNER.MAX_QUERIES_PER_WATCH} запросов к API на одно наблюдение ` +
-  '(если больше — сузь даты или число городов).';
+  `• Лимиты: до ${BOT.MAX_ACTIVE_WATCHES} активных наблюдений, до ${PLANNER.MAX_QUERIES_PER_WATCH} запросов к API на одно наблюдение; ` +
+  'для туда-обратно — примерно до 6 пар «месяц вылета × месяц возврата». Если больше — бот попросит сузить даты, ночи или число городов.';
 
 export async function cmdHelp(ctx: BotContext): Promise<void> {
   await ctx.reply(HELP_TEXT, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });

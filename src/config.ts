@@ -56,6 +56,8 @@ export const PLANNER = {
   DAY_QUERY_MAX_WINDOW_DAYS: 3,
   /** Как далеко вперёд можно смотреть (у Aviasales нет данных дальше ~года). */
   MAX_DAYS_AHEAD: 366,
+  /** Оценочный объём ответов одного watch за проверку (CPU на Workers ≈ 2 мс на 150 КБ). */
+  MAX_EST_BYTES_PER_WATCH: 900_000,
   MAX_ORIGINS: 5,
   MAX_DESTINATIONS: 5,
   MAX_NIGHTS: 60,
@@ -104,9 +106,12 @@ export const BUDGET = {
   TICK_TG_MESSAGES: 8,
   /** Запросов к API при ручной проверке / после создания. */
   MANUAL_API_REQUESTS: 24,
-  /** Оценочный объём JSON на тик (защита от 10 мс CPU). Замер на реальных ответах: ~0,5 мс на 100 КБ
-   *  (разбор + zod + фильтры) на быстрой машине; на Workers закладываем в 2–3 раза больше. */
-  TICK_MAX_RESPONSE_BYTES: 800_000,
+  /** Оценочный объём JSON на тик (защита от 10 мс CPU). Замер на Workers: ~2 мс CPU на страницу 150 КБ
+   *  (разбор + фильтры + кэш) плюс холодный старт ~4–10 мс. 450 КБ ≈ 3 помесячные страницы. */
+  TICK_MAX_RESPONSE_BYTES: 450_000,
+  /** Во сколько раз урезать объём после прерванного тика (и как быстро восстанавливать). */
+  ABORT_BUDGET_FACTOR_MIN: 0.25,
+  ABORT_BUDGET_RECOVERY: 1.25,
   /** Сколько subrequests держать в запасе на запись в D1 и отправку сообщений. */
   RESERVE_FOR_WRITES: 4,
   /** Дедлайн на сетевую часть проверки из вебхука (waitUntil живёт ≤ 30 с). */
@@ -143,3 +148,6 @@ export const BOT = {
 } as const;
 
 export const AVIASALES_HOST = 'https://www.aviasales.ru';
+
+/** Название продукта в системных сообщениях (в приветствии — имя бота из BotFather). */
+export const APP_NAME = 'FlightTracker';

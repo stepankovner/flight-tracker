@@ -88,13 +88,88 @@ export function normalizeItem(item: PriceItem, currency: string): Offer {
   };
 }
 
+// ---------- Быстрый разбор (горячий путь) ----------
+// zod на Workers стоит ~9 мкс на запись (замер: 1,8 мс на страницу из 191 записи при 0,8 мс на JSON.parse),
+// поэтому сотни записей за тик разбираются вручную. Семантика — ровно как у PriceItemSchema;
+// паритет на граничных случаях проверяет test/providers.test.ts.
+
+type Raw = Record<string, unknown>;
+
+// Хелперы возвращают undefined, если значение невалидно (валидные значения — string | number | null).
+function optStrFast(v: unknown): string | null | undefined {
+  if (v === undefined || v === null) return null;
+  return typeof v === 'string' ? v || null : undefined;
+}
+function optNumFast(v: unknown): number | null | undefined {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'number' && typeof v !== 'string') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function defStr(v: unknown): string | undefined {
+  if (v === undefined) return '';
+  return typeof v === 'string' ? v : undefined;
+}
+
+/** Запись prices_for_dates / grouped_prices → PriceItem без zod; null — запись невалидна. */
+export function fastParseItem(raw: unknown): PriceItem | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Raw;
+  const { origin_airport, destination_airport, departure_at, flight_number } = r;
+  if (typeof origin_airport !== 'string' || origin_airport.length < 2) return null;
+  if (typeof destination_airport !== 'string' || destination_airport.length < 2) return null;
+  if (typeof departure_at !== 'string' || departure_at.length < 10) return null;
+  // z.coerce.number(): Number(x), затем > 0
+  const price = Number(r.price);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  if (flight_number !== undefined && typeof flight_number !== 'string' && typeof flight_number !== 'number') return null;
+  const origin = optStrFast(r.origin);
+  const destination = optStrFast(r.destination);
+  const return_at = optStrFast(r.return_at);
+  const found_at = optStrFast(r.found_at);
+  const expires_at = optStrFast(r.expires_at);
+  const transfers = optNumFast(r.transfers);
+  const return_transfers = optNumFast(r.return_transfers);
+  const duration = optNumFast(r.duration);
+  const duration_to = optNumFast(r.duration_to);
+  const duration_back = optNumFast(r.duration_back);
+  const airline = defStr(r.airline);
+  const link = defStr(r.link);
+  if (
+    origin === undefined || destination === undefined || return_at === undefined || found_at === undefined ||
+    expires_at === undefined || transfers === undefined || return_transfers === undefined || duration === undefined ||
+    duration_to === undefined || duration_back === undefined || airline === undefined || link === undefined
+  ) {
+    return null;
+  }
+  return {
+    origin,
+    destination,
+    origin_airport,
+    destination_airport,
+    price,
+    airline,
+    flight_number: flight_number === undefined ? '' : String(flight_number),
+    departure_at,
+    return_at,
+    transfers,
+    return_transfers,
+    duration,
+    duration_to,
+    duration_back,
+    link,
+    found_at,
+    expires_at,
+  };
+}
+
 /** Разбор массива записей: невалидные пропускаются; если невалидно всё — это смена схемы API. */
 export function parseItems(items: unknown[], currency: string): { offers: Offer[]; invalid: number } {
   const offers: Offer[] = [];
   let invalid = 0;
   for (const raw of items) {
-    const r = PriceItemSchema.safeParse(raw);
-    if (r.success) offers.push(normalizeItem(r.data, currency));
+    const item = fastParseItem(raw);
+    if (item) offers.push(normalizeItem(item, currency));
     else invalid++;
   }
   if (items.length > 0 && offers.length === 0) {
@@ -176,11 +251,11 @@ export class TravelpayoutsProvider implements FareProvider {
     const values = Array.isArray(data) ? data : Object.values(data);
     const points: CalendarPoint[] = [];
     for (const raw of values) {
-      const r = PriceItemSchema.safeParse(raw);
-      if (!r.success) continue;
+      const item = fastParseItem(raw);
+      if (!item) continue;
       // для туда-обратно нужны только варианты с возвратом, для «в одну сторону» — без
-      if (q.oneWay !== !r.data.return_at) continue;
-      points.push({ departDate: r.data.departure_at.slice(0, 10), price: Math.round(r.data.price) });
+      if (q.oneWay !== !item.return_at) continue;
+      points.push({ departDate: item.departure_at.slice(0, 10), price: Math.round(item.price) });
     }
     return points;
   }

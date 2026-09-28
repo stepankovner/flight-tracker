@@ -13,7 +13,7 @@ import { offer } from './helpers.ts';
 const BOT_INFO = {
   id: 42,
   is_bot: true,
-  first_name: 'FareWatch',
+  first_name: 'FlightTracker',
   username: 'farewatch_test_bot',
   can_join_groups: false,
   can_read_all_group_messages: false,
@@ -107,7 +107,7 @@ describe('доступ (SPEC §8.1)', () => {
   it('разрешённый username привязывается по /start, чужой получает вежливый отказ', async () => {
     const { h, d } = await setup();
     await d.text('/start');
-    expect(d.lastText()).toContain('FareWatch');
+    expect(d.lastText()).toContain('Я <b>FlightTracker</b>');
     const alice = await h.repo.getUserByTgId(ALICE.id);
     expect(alice).toMatchObject({ chatId: ALICE.id, username: 'alice', boundUsername: 'alice' });
 
@@ -130,7 +130,7 @@ describe('доступ (SPEC §8.1)', () => {
   it('username в allowlist нечувствителен к регистру и @', async () => {
     const { d } = await setup();
     await d.text('/start', { id: 5, is_bot: false, first_name: 'Bob', username: 'BOB' });
-    expect(d.lastText()).toContain('FareWatch');
+    expect(d.lastText()).toContain('FlightTracker');
   });
 });
 
@@ -146,7 +146,7 @@ describe('мастер /new (SPEC §8.3)', () => {
 
     await d.text('Москва');
     expect(d.shown().some((t) => t.includes('🛫 Откуда: Москва'))).toBe(true);
-    expect(d.lastText()).toContain('Куда?');
+    expect(d.lastText()).toContain('Куда летим?');
 
     await d.text('Стамбул');
     expect(d.lastText()).toContain('Тип поездки');
@@ -220,6 +220,31 @@ describe('мастер /new (SPEC §8.3)', () => {
     await d.press('w:x');
     expect(d.lastText()).toContain('Отменил');
     expect(await h.repo.getWizard(ALICE.id)).toBeNull();
+  });
+
+  it('маршрут одной строкой на первом шаге: «Москва - Алматы»', async () => {
+    const { h, d } = await setup();
+    h.places['алматы'] = [{ kind: 'city', code: 'ALA', name: 'Алматы', cityCode: 'ALA', cityName: 'Алматы', countryName: 'Казахстан', weight: 184974 }];
+    await d.text('/new');
+    expect(d.lastText()).toContain('Можно сразу весь маршрут');
+    await d.text('Москва - Алматы');
+    expect(d.shown()).toEqual(expect.arrayContaining(['🛫 Откуда: Москва (MOW), Россия', '🛬 Куда: Алматы (ALA), Казахстан']));
+    expect(d.lastText()).toContain('Тип поездки');
+    const st = await h.repo.getWizard(ALICE.id);
+    expect(JSON.parse(st!.draft)).toMatchObject({ origins: [{ code: 'MOW' }], destinations: [{ code: 'ALA' }] });
+  });
+
+  it('«москва-алматы» — маршрут, «Улан-Удэ» — один город', async () => {
+    const { h, d } = await setup();
+    h.places['алматы'] = [{ kind: 'city', code: 'ALA', name: 'Алматы', cityCode: 'ALA', cityName: 'Алматы', countryName: 'Казахстан', weight: 184974 }];
+    h.places['улан-удэ'] = [{ kind: 'city', code: 'UUD', name: 'Улан-Удэ', cityCode: 'UUD', cityName: 'Улан-Удэ', countryName: 'Россия', weight: 18045 }];
+    await d.text('/new');
+    await d.text('москва-алматы');
+    expect(d.lastText()).toContain('Тип поездки');
+    await d.text('/new');
+    await d.text('Улан-Удэ');
+    expect(d.shown()).toContain('🛫 Откуда: Улан-Удэ (UUD), Россия');
+    expect(d.lastText()).toContain('Куда летим');
   });
 
   it('неизвестный город и совпадающие пункты', async () => {
@@ -421,8 +446,8 @@ describe('Worker: роутинг (SPEC §10)', () => {
     expect(res.status).toBe(500);
   });
 
-  it('cron: */15 → tick, 7 3 * * * → daily', async () => {
-    await handleScheduled({ cron: '*/15 * * * *', scheduledTime: Date.now() }, env() as never, ctx);
+  it('cron: */5 → tick, 7 3 * * * → daily', async () => {
+    await handleScheduled({ cron: '*/5 * * * *', scheduledTime: Date.now() }, env() as never, ctx);
     expect((await h.repo.getKv(['last_tick_at'])).has('last_tick_at')).toBe(true);
     await handleScheduled({ cron: '7 3 * * *', scheduledTime: Date.now() }, env() as never, ctx);
     expect(h.rows("SELECT name FROM counters WHERE name = 'ticks'")).toHaveLength(1);

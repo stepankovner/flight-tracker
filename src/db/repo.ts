@@ -373,6 +373,15 @@ export class Repo {
     );
   }
 
+  /** Проверка оборвалась (лимит CPU): отодвинуть watch в конец очереди и засчитать ошибку. */
+  stmtWatchAborted(id: number, now: string): SqlStatement {
+    return this.stmt(
+      "UPDATE watches SET last_checked_at = ?, error_count = error_count + 1, last_error = 'Проверка прервана лимитом CPU хостинга — повторю позже' WHERE id = ?",
+      now,
+      id,
+    );
+  }
+
   stmtWatchBootstrap(id: number, baseline: number | null, now: string): SqlStatement {
     return this.stmt('UPDATE watches SET bootstrap_baseline = ?, bootstrap_at = ? WHERE id = ?', baseline, now, id);
   }

@@ -201,35 +201,66 @@ describe('tick: ошибки провайдера (SPEC §5.5)', () => {
 });
 
 describe('tick: бюджет и round-robin (SPEC §9)', () => {
-  it('watch, не влезшие в бюджет запросов, проверяются следующим тиком', async () => {
+  it('watch, не влезшие в бюджет тика, проверяются следующими тиками по очереди (без голодания)', async () => {
     const { h, user } = await setup();
-    // 2 × 2 пары × 3 месяца = 12 запросов на watch; бюджет тика — 24
-    const wide = { tripType: 'oneway' as const, nightsMin: null, nightsMax: null, departFrom: '2026-10-01', departTo: '2026-12-31' };
+    // каждый — 2 помесячных запроса ≈ 300 КБ; бюджет тика 450 КБ → по одному watch за тик
     const ids = [];
-    for (const dest of [['IST', 'AYT'], ['DXB', 'LED'], ['KZN', 'AYT']]) {
-      ids.push(await h.watch(user.id, spec({ ...wide, origins: ['MOW', 'LED'].filter((o) => !dest.includes(o)).concat(dest.includes('LED') ? ['KZN'] : []), destinations: dest })));
+    for (const dest of ['IST', 'AYT', 'DXB']) ids.push(await h.watch(user.id, spec({ destinations: [dest] })));
+    const order: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await runTick(h.svc());
+      expect(r.checks?.checked).toHaveLength(1);
+      order.push(...r.checks!.checked);
+      h.advance(5);
     }
-    const r1 = await runTick(h.svc());
-    expect(r1.checks?.checked).toHaveLength(2);
-    expect(r1.checks?.deferred).toHaveLength(1);
-    expect(h.provider.calls.length).toBeLessThanOrEqual(24);
-
-    h.advance(15);
-    const r2 = await runTick(h.svc());
-    expect(r2.checks?.checked).toEqual(r1.checks?.deferred);
+    expect(order).toEqual(ids);
+    expect(h.provider.calls).toHaveLength(6);
+    // все проверены — следующий тик до истечения интервала ничего не делает
+    expect((await runTick(h.svc())).checks).toBeNull();
   });
 
   it('CPU-бюджет: оценка объёма ответов ограничивает число watch за тик, но первый берётся всегда', async () => {
     const { h, user } = await setup();
-    // 7 пар «месяц вылета × месяц возврата» × 150 КБ ≈ 1 МБ > 800 КБ — всё равно проверяется (иначе ждал бы вечно)
-    const huge = await h.watch(user.id, spec({ departFrom: '2026-10-01', departTo: '2027-01-20' }));
+    // 5 пар «месяц вылета × месяц возврата» × 150 КБ = 750 КБ > 450 КБ бюджета тика — всё равно проверяется
+    const huge = await h.watch(user.id, spec({ departFrom: '2026-10-01', departTo: '2026-12-20' }));
     const small = await h.watch(user.id, spec({ destinations: ['AYT'] }));
     const r1 = await runTick(h.svc());
     expect(r1.checks?.checked).toEqual([huge]);
     expect(r1.checks?.deferred).toEqual([small]);
-    h.advance(15);
+    h.advance(5);
     const r2 = await runTick(h.svc());
     expect(r2.checks?.checked).toEqual([small]);
+  });
+
+  it('оборванный тик: его watch уходят в конец очереди, объём работы уменьшается, админ в курсе', async () => {
+    const { h, user } = await setup();
+    const admin = await h.user({ tgUserId: 9, username: 'admin' });
+    const a = await h.watch(user.id, spec());
+    const b = await h.watch(user.id, spec({ destinations: ['AYT'] }));
+    // имитируем тик, который взял watch a и был убит платформой до конца
+    await h.repo.setKv('tick_inflight', JSON.stringify({ at: new Date(h.now.getTime() - 5 * 60_000).toISOString(), ids: [a] }), h.now.toISOString());
+    const r = await runTick(h.svc());
+    expect(r.recoveredAbort).toEqual([a]);
+    expect(r.budgetFactor).toBe(0.5);
+    expect(r.checks?.checked).toEqual([b]); // a отодвинут, очередь не заблокирована
+    const wa = (await h.repo.getWatch(a))!;
+    expect(wa.errorCount).toBe(1);
+    expect(wa.lastError).toContain('CPU');
+    expect(h.messenger.sent.filter((m) => m.chatId === admin.chatId).map((m) => m.text).join()).toContain('не завершился');
+    expect((await h.repo.getKv(['tick_inflight'])).get('tick_inflight')).toBe('');
+    // нормальный тик восстанавливает объём постепенно
+    h.advance(5);
+    const r2 = await runTick(h.svc());
+    expect(r2.recoveredAbort).toEqual([]);
+    expect((await h.repo.getKv(['tick_budget_factor'])).get('tick_budget_factor')).toBe('0.625');
+  });
+
+  it('свежий маркер «в работе» (параллельный тик) не считается обрывом', async () => {
+    const { h, user } = await setup();
+    await h.watch(user.id, spec());
+    await h.repo.setKv('tick_inflight', JSON.stringify({ at: h.now.toISOString(), ids: [1] }), h.now.toISOString());
+    const r = await runTick(h.svc());
+    expect(r.recoveredAbort).toEqual([]);
   });
 
   it('страница, где записей чуть меньше limit, — не последняя', () => {
@@ -237,9 +268,9 @@ describe('tick: бюджет и round-robin (SPEC §9)', () => {
     expect(isLastPage(150)).toBe(false);
     expect(isLastPage(149)).toBe(true);
     expect(isLastPage(0)).toBe(true);
-    expect(estimateResponseBytes({ origin: 'MOW', destination: 'IST', departureAt: '2026-11', returnAt: null, oneWay: true, direct: false, currency: 'rub', market: 'ru' })).toBe(25_000);
-    expect(estimateResponseBytes({ origin: 'MOW', destination: 'IST', departureAt: '2026-11', returnAt: '2026-12', oneWay: false, direct: false, currency: 'rub', market: 'ru' })).toBe(150_000);
-    expect(estimateResponseBytes({ origin: 'MOW', destination: 'IST', departureAt: '2026-11-15', returnAt: '2026-12', oneWay: false, direct: false, currency: 'rub', market: 'ru' })).toBe(50_000);
+    expect(estimateResponseBytes({ departureAt: '2026-11', returnAt: null, oneWay: true })).toBe(25_000);
+    expect(estimateResponseBytes({ departureAt: '2026-11', returnAt: '2026-12', oneWay: false })).toBe(150_000);
+    expect(estimateResponseBytes({ departureAt: '2026-11-15', returnAt: '2026-12', oneWay: false })).toBe(50_000);
   });
 
   it('subrequests одного тика укладываются в лимит 50', async () => {
@@ -285,9 +316,11 @@ describe('доставка: тихие часы, лимит, блокировк�
     await h.watch(user.id, spec({ destinations: ['AYT'] }));
     await h.watch(user.id, spec({ destinations: ['DXB'] }));
     h.provider.offers = [offer({ price: 9000 }), offer({ price: 9000, destAirport: 'AYT' }), offer({ price: 9000, destAirport: 'DXB' })];
-    await runTick(h.svc());
-    h.advance(15); // третий watch не влез в CPU-бюджет первого тика
-    await runTick(h.svc());
+    // бюджет тика — один такой watch (2 помесячных запроса), поэтому три тика по 5 минут
+    for (let i = 0; i < 3; i++) {
+      await runTick(h.svc());
+      h.advance(5);
+    }
     expect(h.messenger.texts().filter((t) => t.includes('💰'))).toHaveLength(1);
     expect(h.messenger.texts().filter((t) => t.includes('Дневной лимит'))).toHaveLength(1);
     expect(h.rows("SELECT COUNT(*) AS n FROM outbox WHERE deferred = 'cap' AND status = 'pending'")[0]).toEqual({ n: 2 });
@@ -329,14 +362,15 @@ describe('доставка: тихие часы, лимит, блокировк�
 
   it('flood wait (429 от Telegram) — останавливаем отправку, ничего не теряем', async () => {
     const { h, user } = await setup();
-    await h.watch(user.id, spec());
-    await h.watch(user.id, spec({ destinations: ['AYT'] }));
-    h.provider.offers = [offer({ price: 9000 }), offer({ price: 9000, destAirport: 'AYT' })];
+    await h.watch(user.id, spec({ tripType: 'oneway', nightsMin: null, nightsMax: null }));
+    await h.watch(user.id, spec({ tripType: 'oneway', nightsMin: null, nightsMax: null, destinations: ['AYT'] }));
+    h.provider.offers = [offer({ price: 9000, returnAt: null }), offer({ price: 9000, returnAt: null, destAirport: 'AYT' })];
     h.messenger.next = [{ ok: false, kind: 'retry_after', retryAfterSec: 30 }];
     const r = await runTick(h.svc());
+    expect(r.checks?.checked).toHaveLength(2);
     expect(r.dispatch.floodWaitSec).toBe(30);
     expect(h.rows("SELECT COUNT(*) AS n FROM outbox WHERE status = 'pending'")[0]).toEqual({ n: 2 });
-    h.advance(15);
+    h.advance(5);
     await runTick(h.svc());
     expect(h.messenger.sent).toHaveLength(2);
   });

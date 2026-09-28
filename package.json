@@ -1,5 +1,5 @@
 {
-  "name": "farewatch",
+  "name": "flight-tracker",
   "version": "1.0.0",
   "private": true,
   "description": "Telegram-бот мониторинга дешёвых авиабилетов (Travelpayouts Data API, Cloudflare Workers + D1)",

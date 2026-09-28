@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { choosePlace, fetchAirlines, parsePlaces, placeLabel, searchPlaces, type Place } from '../src/providers/autocomplete.ts';
 import { ProviderError } from '../src/providers/FareProvider.ts';
-import { parseItems, PriceItemSchema, TravelpayoutsProvider } from '../src/providers/travelpayouts.ts';
+import { fastParseItem, parseItems, PriceItemSchema, TravelpayoutsProvider } from '../src/providers/travelpayouts.ts';
 import { rawItem } from './helpers.ts';
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
@@ -147,6 +147,46 @@ describe('TravelpayoutsProvider.search', () => {
   it('если невалидны все записи — считаем, что схема API изменилась', () => {
     expect(() => parseItems([{ foo: 1 }, { bar: 2 }], 'rub')).toThrow(ProviderError);
     expect(parseItems([], 'rub')).toEqual({ offers: [], invalid: 0 });
+  });
+
+  it('быстрый разбор совпадает со схемой zod на граничных случаях', () => {
+    const cases: unknown[] = [
+      rawItem(),
+      rawItem({ price: '9000' }),
+      rawItem({ price: -5 }),
+      rawItem({ price: 0 }),
+      rawItem({ price: 'abc' }),
+      rawItem({ price: null }),
+      rawItem({ price: true }),
+      rawItem({ flight_number: 418 }),
+      rawItem({ flight_number: undefined }),
+      rawItem({ flight_number: null }),
+      rawItem({ airline: undefined, link: undefined }),
+      rawItem({ airline: null }),
+      rawItem({ link: 5 }),
+      rawItem({ return_at: null, return_transfers: null }),
+      rawItem({ return_at: '' }),
+      rawItem({ return_at: 7 }),
+      rawItem({ transfers: '1' }),
+      rawItem({ transfers: 'x' }),
+      rawItem({ transfers: '' }),
+      rawItem({ transfers: true }),
+      rawItem({ duration: undefined, duration_to: null }),
+      rawItem({ origin_airport: 'S' }),
+      rawItem({ destination_airport: undefined }),
+      rawItem({ departure_at: '2026-11' }),
+      rawItem({ found_at: '2026-09-28T10:00:00Z', expires_at: '2026-09-29T10:00:00Z', gate: 'Kiwi' }),
+      null,
+      'string',
+      [1, 2],
+      {},
+    ];
+    for (const c of cases) {
+      const z = PriceItemSchema.safeParse(c);
+      const f = fastParseItem(c);
+      expect(f !== null, JSON.stringify(c)).toBe(z.success);
+      if (z.success) expect(f).toEqual(z.data);
+    }
   });
 
   it('схема терпима к null и отсутствующим полям', () => {

@@ -14,17 +14,19 @@ export async function cmdStatus(ctx: BotContext): Promise<void> {
     svc.repo.getCounters(today),
     svc.repo.getCounters(addDays(today, -1)),
     svc.repo.countActiveAll(),
-    svc.repo.getKv(['last_tick_at', 'rate_limited_until', 'rate_limit_level', 'airlines_at']),
+    svc.repo.getKv(['last_tick_at', 'rate_limited_until', 'rate_limit_level', 'airlines_at', 'tick_budget_factor']),
   ]);
   const fmt = (c: Record<string, number>) =>
     `API ${c.api_requests ?? 0} (ошибок ${c.api_errors ?? 0}) · проверок ${c.checks ?? 0} · тиков ${c.ticks ?? 0} · ` +
-    `алертов ${c.alerts ?? 0} · сообщений ${c.tg_sent ?? 0} (ошибок ${c.tg_errors ?? 0})`;
+    `алертов ${c.alerts ?? 0} · сообщений ${c.tg_sent ?? 0} (ошибок ${c.tg_errors ?? 0})` +
+    (c.tick_aborted ? ` · ⚠️ оборванных тиков ${c.tick_aborted}` : '');
   const rl = kv.get('rate_limited_until');
   const lines = [
     '🛠 <b>Статус</b>',
     `активных watch (все пользователи): ${active}`,
     `последний тик: ${kv.get('last_tick_at') ?? 'ещё не было'}`,
     rl && Date.parse(rl) > svc.now().getTime() ? `⚠️ пауза API до ${rl} (уровень ${kv.get('rate_limit_level')})` : 'API: без ограничений',
+    `объём работы за тик: ${Math.round(Number(kv.get('tick_budget_factor') || 1) * 100)}%`,
     `справочник авиакомпаний: ${kv.get('airlines_at') ?? 'не загружен'}`,
     '',
     `<b>Сегодня (UTC):</b> ${fmt(t)}`,

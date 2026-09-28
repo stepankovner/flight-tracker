@@ -88,7 +88,7 @@ async function runJob(kind: 'tick' | 'daily'): Promise<void> {
   }
 }
 
-/** Те же расписания, что в wrangler.toml: каждые 15 минут и в 03:07 UTC. */
+/** Те же расписания, что в wrangler.toml: каждые 5 минут и в 03:07 UTC. */
 function schedule(): NodeJS.Timeout {
   let lastMinute = -1;
   return setInterval(() => {
@@ -97,12 +97,12 @@ function schedule(): NodeJS.Timeout {
     if (minute === lastMinute) return;
     lastMinute = minute;
     if (now.getUTCHours() === 3 && now.getUTCMinutes() === 7) void runJob('daily');
-    else if (now.getUTCMinutes() % 15 === 0) void runJob('tick');
+    else if (now.getUTCMinutes() % 5 === 0) void runJob('tick');
   }, 5_000);
 }
 
 const me = await tg<UserFromGetMe>('getMe', {});
-log.info('FareWatch (node) started', { bot: me.username, db: process.env.DB_PATH ?? './data/farewatch.db', dryRun: cfg.dryRun });
+log.info('FlightTracker (node) started', { bot: me.username, db: process.env.DB_PATH ?? './data/farewatch.db', dryRun: cfg.dryRun });
 const timer = schedule();
 void runJob('tick');
 

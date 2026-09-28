@@ -1,4 +1,4 @@
-# Вариант C (SPEC §2.3): FareWatch на домашнем ПК/VPS — Node 24 + SQLite-файл, long polling.
+# Вариант C (SPEC §2.3): FlightTracker на домашнем ПК/VPS — Node 24 + SQLite-файл, long polling.
 # Сборка:  docker build -t farewatch .
 # Запуск:  docker run -d --name farewatch --restart unless-stopped --env-file .dev.vars -v farewatch-data:/data farewatch
 FROM node:24-alpine

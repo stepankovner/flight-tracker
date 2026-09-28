@@ -12,7 +12,9 @@ import {
   type DailyMinPoint,
   type PriceStats,
 } from '../core/priceDetector.ts';
-import { calendarKey, planBootstrap, planQueries, queryKey } from '../core/queryPlanner.ts';
+import { calendarKey, estimateResponseBytes, planBootstrap, planQueries, queryKey } from '../core/queryPlanner.ts';
+
+export { estimateResponseBytes };
 import type { FareQuery, Offer, User, Watch } from '../core/types.ts';
 import type { Repo } from '../db/repo.ts';
 import type { SqlStatement } from '../db/sql.ts';
@@ -46,6 +48,8 @@ export interface CheckOptions {
   reserveSubrequests: number;
   /** Не начинать новые запросы после этого момента (epoch ms). */
   deadline?: number;
+  /** Вызывается после отбора watch, до запросов (тик пишет маркер «в работе» на случай обрыва по CPU). */
+  onSelected?: (watchIds: number[]) => Promise<void>;
 }
 
 export interface CheckReport {
@@ -94,13 +98,6 @@ interface CachePayload {
 /** Страница последняя, если записей заметно меньше limit (API слегка недодаёт и на полных). */
 export function isLastPage(rawCount: number): boolean {
   return rawCount < PROVIDER.PAGE_LIMIT * PROVIDER.PAGE_FULL_RATIO;
-}
-
-/** Оценка объёма первой страницы ответа по типу запроса (по замерам на реальном API). */
-export function estimateResponseBytes(q: FareQuery): number {
-  if (q.oneWay) return 25_000; // один билет на дату: ≤ 31 запись
-  const monthly = q.departureAt.length === 7 && (q.returnAt?.length ?? 0) === 7;
-  return monthly ? 150_000 : 50_000;
 }
 
 /** Кэш ответа провайдера: самые дешёвые CACHE_MAX_OFFERS офферов (нормализованные). */
@@ -253,6 +250,7 @@ export async function runChecks(deps: CheckDeps, targets: CheckTarget[], opts: C
   for (const [key, st] of states) {
     if (!st.fromCache && !selectedKeys.has(key)) st.skipped = true;
   }
+  if (opts.onSelected && accepted.length) await opts.onSelected(accepted.map((p) => p.target.watch.id));
 
   const canSpend = () =>
     report.abort === null &&

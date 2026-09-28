@@ -15,6 +15,7 @@ import {
   type NameBook,
 } from '../core/format.ts';
 import { planQueries } from '../core/queryPlanner.ts';
+import { splitRoute } from '../core/routeInput.ts';
 import type { PriceMode, TripType, Watch, WatchSpec } from '../core/types.ts';
 import { runInitialCheck } from '../jobs/manual.ts';
 import { previewPrices } from '../jobs/preview.ts';
@@ -70,6 +71,8 @@ export interface Draft {
   /** Правка раздела с экрана подтверждения — после неё вернуться туда. */
   toConfirm: boolean;
   pick: { field: PlaceField; queue: Array<{ term: string; options: PlaceRef[] }>; resolved: PlaceRef[] } | null;
+  /** Маршрут введён одной строкой («Москва - Алматы»): куда — разберём после «откуда». */
+  routeDest?: string | null;
   pendingMode: PriceMode | null;
   hint: { price: number; line: string } | null;
   hintChecked: boolean;
@@ -241,9 +244,22 @@ async function screen(ctx: BotContext, step: Step, d: Draft, edit: boolean): Pro
   const currency = ctx.user.currency;
   switch (step) {
     case 'origins':
-      return show(ctx, '🛫 <b>Откуда летим?</b>\nГород или код аэропорта. Можно несколько через запятую: «Москва, Питер».', [nav], { edit });
+      return show(
+        ctx,
+        '🛫 <b>Откуда летим?</b>\n' +
+          'Напиши город вылета — например, <i>Москва</i>. Можно сразу весь маршрут: <i>Москва - Алматы</i>.\n' +
+          'Если подходят несколько городов вылета — перечисли через запятую: <i>Москва, Санкт-Петербург</i>.',
+        [nav],
+        { edit },
+      );
     case 'destinations':
-      return show(ctx, '🛬 <b>Куда?</b>\nГород или код аэропорта, можно несколько через запятую: «Стамбул, Анталья».', [nav], { edit });
+      return show(
+        ctx,
+        '🛬 <b>Куда летим?</b>\n' +
+          'Напиши город назначения — например, <i>Алматы</i>. Можно несколько через запятую: <i>Стамбул, Анталья</i> — буду искать по всем.',
+        [nav],
+        { edit },
+      );
     case 'origins_pick':
     case 'destinations_pick': {
       const cur = d.pick?.queue[0];
@@ -439,9 +455,17 @@ export async function handleWizardText(ctx: BotContext, text: string): Promise<b
 
   switch (step) {
     case 'origins':
-    case 'destinations':
+    case 'destinations': {
+      // маршрут одной строкой: «Москва - Алматы», «из Москвы в Алматы»
+      const route = splitRoute(text);
+      if (route && (route.strict || !(await resolvesAsOnePlace(ctx, text)))) {
+        d.routeDest = route.to;
+        await handlePlaces(ctx, 'origins', d, route.from);
+        return true;
+      }
       await handlePlaces(ctx, step, d, text);
       return true;
+    }
     case 'dates': {
       const r = parseDateRange(text, today);
       if (!r.ok) {
@@ -494,6 +518,15 @@ export async function handleWizardText(ctx: BotContext, text: string): Promise<b
     default:
       await ctx.reply('Выбери вариант кнопкой в сообщении выше или /cancel, чтобы выйти из мастера.');
       return true;
+  }
+}
+
+/** «Улан-Удэ» — одно название, а не маршрут «Улан → Удэ». */
+async function resolvesAsOnePlace(ctx: BotContext, text: string): Promise<boolean> {
+  try {
+    return choosePlace(text, await ctx.svc.searchPlaces(text), BOT.AUTOCOMPLETE_MAX_CHOICES).kind !== 'none';
+  } catch {
+    return false;
   }
 }
 
@@ -550,6 +583,13 @@ async function applyPlaces(ctx: BotContext, field: PlaceField, d: Draft, refs: P
   }
   const label = unique.map((r) => escapeHtml(r.name)).join(', ');
   if (!edit) await ctx.reply(`${field === 'origins' ? '🛫 Откуда' : '🛬 Куда'}: ${label}`, { parse_mode: 'HTML' });
+  if (field === 'origins' && d.routeDest) {
+    const dest = d.routeDest;
+    d.routeDest = null;
+    if (edit) await ctx.reply(`🛫 Откуда: ${label}`, { parse_mode: 'HTML' });
+    await handlePlaces(ctx, 'destinations', d, dest);
+    return;
+  }
   await goto(ctx, nextStep(field, d), d, edit);
 }
 

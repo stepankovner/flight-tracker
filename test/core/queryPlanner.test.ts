@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calendarKey, effectiveWindow, planBootstrap, planQueries, queryKey } from '../../src/core/queryPlanner.ts';
+import { calendarKey, effectiveWindow, estimateResponseBytes, planBootstrap, planQueries, queryKey } from '../../src/core/queryPlanner.ts';
 import type { FareQuery } from '../../src/core/types.ts';
 import { spec } from '../helpers.ts';
 
@@ -121,6 +121,16 @@ describe('planQueries: города и лимиты', () => {
       expect(r.error.queries).toBe(27);
       expect(r.error.message).toMatch(/Сузь даты/);
     }
+  });
+
+  it('слишком «тяжёлое» туда-обратно (много помесячных пар) → отказ', () => {
+    // 2 направления × 4 пары месяцев × 150 КБ = 1,2 МБ > 900 КБ
+    const r = planQueries(spec({ destinations: ['IST', 'AYT'], departFrom: '2026-10-01', departTo: '2026-11-30' }), TODAY, OPTS);
+    expect(!r.ok && r.error.code).toBe('too_heavy');
+    if (!r.ok) expect(r.error.message).toMatch(/раздели на два наблюдения/);
+    // то же в одну сторону — лёгкое
+    expect(planQueries(spec({ tripType: 'oneway', destinations: ['IST', 'AYT'], departFrom: '2026-10-01', departTo: '2026-11-30' }), TODAY, OPTS).ok).toBe(true);
+    expect(estimateResponseBytes({ oneWay: false, departureAt: '2026-11-15', returnAt: '2026-11-22' })).toBe(50_000);
   });
 
   it('ровно 24 запроса допустимы', () => {

@@ -1,4 +1,4 @@
-# FareWatch — Cloudflare Worker (SPEC §2.1). Секреты задаются через `npm run secrets:push` (см. README).
+# FlightTracker — Cloudflare Worker (SPEC §2.1). Секреты задаются через `npm run secrets:push` (см. README).
 name = "farewatch"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
@@ -7,8 +7,9 @@ workers_dev = true
 preview_urls = false
 
 [triggers]
-# tick каждые 15 минут + ежедневное обслуживание в 03:07 UTC
-crons = ["*/15 * * * *", "7 3 * * *"]
+# tick каждые 5 минут (маленькими порциями — лимит 10 мс CPU, см. docs/DECISIONS.md)
+# + ежедневное обслуживание в 03:07 UTC
+crons = ["*/5 * * * *", "7 3 * * *"]
 
 [[d1_databases]]
 binding = "DB"

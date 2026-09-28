@@ -19,7 +19,7 @@ export interface PlanOptions {
 }
 
 export interface PlanError {
-  code: 'window_passed' | 'no_pairs' | 'no_return_dates' | 'too_many_queries' | 'invalid';
+  code: 'window_passed' | 'no_pairs' | 'no_return_dates' | 'too_many_queries' | 'too_heavy' | 'invalid';
   message: string;
   queries?: number;
 }
@@ -37,6 +37,13 @@ export function queryKey(q: FareQuery): string {
     q.currency.toLowerCase(),
     q.market.toLowerCase(),
   ].join('|');
+}
+
+/** Оценка объёма первой страницы ответа по типу запроса (по замерам на реальном API). */
+export function estimateResponseBytes(q: Pick<FareQuery, 'oneWay' | 'departureAt' | 'returnAt'>): number {
+  if (q.oneWay) return 25_000; // один билет на дату: ≤ 31 запись
+  const monthly = q.departureAt.length === 7 && (q.returnAt?.length ?? 0) === 7;
+  return monthly ? 150_000 : 50_000;
 }
 
 /** Эффективное окно вылета с учётом «сегодня». null — окно целиком в прошлом. */
@@ -155,6 +162,17 @@ export function planQueries(watch: WatchSpec, today: IsoDate, opts: PlanOptions)
       message:
         `Слишком широкое наблюдение: нужно ${total} запросов к API за проверку ` +
         `(максимум ${PLANNER.MAX_QUERIES_PER_WATCH}). Сузь даты или уменьши число городов.`,
+    });
+  }
+
+  const estBytes = pairs.length * legs.reduce((sum, l) => sum + estimateResponseBytes({ oneWay: watch.tripType === 'oneway', ...l }), 0);
+  if (estBytes > PLANNER.MAX_EST_BYTES_PER_WATCH) {
+    return err({
+      code: 'too_heavy',
+      queries: total,
+      message:
+        `Слишком широкое наблюдение: ${total} помесячных запросов туда-обратно за проверку — это тяжело для бесплатного хостинга. ` +
+        'Сузь окно дат или ночей, либо уменьши число городов (например, раздели на два наблюдения).',
     });
   }
 

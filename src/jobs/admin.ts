@@ -1,4 +1,4 @@
-import { BOT } from '../config.ts';
+import { APP_NAME, BOT } from '../config.ts';
 import { escapeHtml } from '../core/format.ts';
 import type { Services } from '../services.ts';
 
@@ -18,7 +18,7 @@ export async function notifyAdmin(svc: Services, key: string, text: string, cool
     if (last && now.getTime() - Date.parse(last) < cooldownMin * 60_000) return false;
     const admin = await repo.getUserByUsername(cfg.adminUsername);
     if (!admin || admin.isBlocked) return false;
-    const res = await svc.messenger.send(admin.chatId, `🛠 <b>FareWatch</b>\n${escapeHtml(text)}`);
+    const res = await svc.messenger.send(admin.chatId, `🛠 <b>${APP_NAME}</b>\n${escapeHtml(text)}`);
     await repo.setKv(kvKey, now.toISOString(), now.toISOString());
     return res.ok;
   } catch (e) {
