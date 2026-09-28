@@ -1,0 +1,29 @@
+name: API smoke
+
+# Раз в неделю проверяет, что схема ответа Travelpayouts не изменилась (npm run smoke).
+# Нужен секрет репозитория TRAVELPAYOUTS_TOKEN; без него job ничего не делает.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Нет токена — пропускаем
+        if: env.TRAVELPAYOUTS_TOKEN == ''
+        run: echo "::notice::TRAVELPAYOUTS_TOKEN не задан — smoke пропущен"
+      - if: env.TRAVELPAYOUTS_TOKEN != ''
+        run: npm ci
+      - if: env.TRAVELPAYOUTS_TOKEN != ''
+        run: |
+          printf 'TRAVELPAYOUTS_TOKEN=%s\n' "$TRAVELPAYOUTS_TOKEN" > .dev.vars
+          npm run smoke
