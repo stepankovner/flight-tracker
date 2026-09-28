@@ -1,0 +1,26 @@
+# FareWatch — Cloudflare Worker (SPEC §2.1). Секреты задаются через `npm run secrets:push` (см. README).
+name = "farewatch"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+# URL вида *-<hash>.workers.dev для каждой версии не нужен
+preview_urls = false
+
+[triggers]
+# tick каждые 15 минут + ежедневное обслуживание в 03:07 UTC
+crons = ["*/15 * * * *", "7 3 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "farewatch"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+DEFAULT_CURRENCY = "rub"
+MARKET = "ru"
+DRY_RUN = "0"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
