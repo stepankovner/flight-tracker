@@ -1,0 +1,50 @@
+[
+ {
+  "type": "city",
+  "code": "ALY",
+  "name": "Александрия",
+  "country_code": "EG",
+  "country_name": "Египет",
+  "weight": 1954
+ },
+ {
+  "type": "city",
+  "code": "AEX",
+  "name": "Александрия",
+  "country_code": "US",
+  "country_name": "США",
+  "weight": 5
+ },
+ {
+  "type": "city",
+  "code": "AXL",
+  "name": "Александрия-Стейшн",
+  "country_code": "AU",
+  "country_name": "Австралия",
+  "weight": 1
+ },
+ {
+  "type": "city",
+  "code": "BUS",
+  "name": "Батуми",
+  "country_code": "GE",
+  "country_name": "Грузия",
+  "weight": 95488
+ },
+ {
+  "type": "city",
+  "code": "STX",
+  "name": "Санта-Крус",
+  "country_code": "VI",
+  "country_name": "Виргинские острова",
+  "weight": 31
+ },
+ {
+  "type": "city",
+  "code": "KVA",
+  "name": "Кавала",
+  "country_code": "GR",
+  "country_name": "Греция",
+  "weight": 4981
+ }
+]

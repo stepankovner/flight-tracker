@@ -1,0 +1,58 @@
+[
+ {
+  "type": "city",
+  "code": "MOW",
+  "name": "Москва",
+  "country_code": "RU",
+  "country_name": "Россия",
+  "weight": 1957808
+ },
+ {
+  "type": "airport",
+  "code": "SVO",
+  "name": "Шереметьево",
+  "country_code": "RU",
+  "country_name": "Россия",
+  "city_code": "MOW",
+  "city_name": "Москва",
+  "weight": 590410
+ },
+ {
+  "type": "airport",
+  "code": "VKO",
+  "name": "Внуково",
+  "country_code": "RU",
+  "country_name": "Россия",
+  "city_code": "MOW",
+  "city_name": "Москва",
+  "weight": 387022
+ },
+ {
+  "type": "airport",
+  "code": "DME",
+  "name": "Домодедово",
+  "country_code": "RU",
+  "country_name": "Россия",
+  "city_code": "MOW",
+  "city_name": "Москва",
+  "weight": 218943
+ },
+ {
+  "type": "airport",
+  "code": "ZIA",
+  "name": "Жуковский",
+  "country_code": "RU",
+  "country_name": "Россия",
+  "city_code": "MOW",
+  "city_name": "Москва",
+  "weight": 45198
+ },
+ {
+  "type": "city",
+  "code": "MSJ",
+  "name": "Мисава",
+  "country_code": "JP",
+  "country_name": "Япония",
+  "weight": 15
+ }
+]

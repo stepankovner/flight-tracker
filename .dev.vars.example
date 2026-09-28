@@ -1,0 +1,18 @@
+# Скопируй в .dev.vars (он в .gitignore) и заполни. `npm run secrets:push` зальёт это в секреты Worker.
+
+# Токен бота от @BotFather
+TELEGRAM_BOT_TOKEN=<123456789:AA...>
+# Секрет вебхука: оставь пустым — secrets:push сгенерирует сам
+TELEGRAM_WEBHOOK_SECRET=
+# API-токен Travelpayouts: https://app.travelpayouts.com/profile/api-token
+TRAVELPAYOUTS_TOKEN=<32 hex>
+# Партнёрский marker Travelpayouts (необязательно) — добавляется в ссылки «Купить»
+TRAVELPAYOUTS_MARKER=
+# Кому можно пользоваться ботом: Telegram username через запятую, без @
+ALLOWED_USERNAMES=<your_username>
+# Кто получает системные ошибки и ежедневный heartbeat (должен быть в ALLOWED_USERNAMES или добавится туда сам)
+ADMIN_USERNAME=<your_username>
+# URL Worker после первого деплоя (для npm run set-webhook)
+WORKER_URL=
+# Только для локального `wrangler dev`: 1 — ничего не отправлять в Telegram, писать в лог
+DRY_RUN=0

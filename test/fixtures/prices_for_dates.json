@@ -1,0 +1,48 @@
+{
+  "success": true,
+  "data": [
+    {
+      "origin": "MOW",
+      "destination": "IST",
+      "origin_airport": "SVO",
+      "destination_airport": "SAW",
+      "price": 8450,
+      "airline": "PC",
+      "flight_number": "395",
+      "departure_at": "2026-11-18T06:40:00+03:00",
+      "return_at": "2026-11-25T18:20:00+03:00",
+      "transfers": 1,
+      "return_transfers": 0,
+      "duration": 600,
+      "duration_to": 360,
+      "duration_back": 240,
+      "link": "/search/MOW1811IST25111?t=PC17634...&search_date=28092026&expected_price_uuid=7531ddb1-26b4-4df9-891e-81dc54d48b2a&expected_price_currency=rub"
+    },
+    {
+      "origin": "MOW",
+      "destination": "IST",
+      "origin_airport": "VKO",
+      "destination_airport": "IST",
+      "price": 9120,
+      "airline": "TK",
+      "flight_number": 418,
+      "departure_at": "2026-11-20T12:05:00+03:00",
+      "return_at": "2026-11-28T09:15:00+03:00",
+      "transfers": 0,
+      "return_transfers": 0,
+      "duration": 480,
+      "duration_to": 240,
+      "duration_back": 240,
+      "link": "/search/MOW2011IST28111?t=TK1763...&search_date=27092026&expected_price_uuid=aa&expected_price_currency=rub"
+    },
+    {
+      "origin": "MOW",
+      "destination": "IST",
+      "origin_airport": "SVO",
+      "destination_airport": "IST",
+      "price": "broken",
+      "departure_at": "2026-11-21T12:05:00+03:00"
+    }
+  ],
+  "currency": "rub"
+}

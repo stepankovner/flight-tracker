@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "2026-11-15": { "origin": "MOW", "destination": "IST", "origin_airport": "VKO", "destination_airport": "IST", "price": 11000, "airline": "TK", "flight_number": "418", "departure_at": "2026-11-15T12:05:00+03:00", "return_at": "2026-11-22T09:15:00+03:00", "transfers": 0, "return_transfers": 0, "duration": 480, "link": "/search/MOW1511IST22111?t=x" },
+    "2026-11-16": { "origin": "MOW", "destination": "IST", "origin_airport": "SVO", "destination_airport": "IST", "price": 12500, "airline": "SU", "flight_number": "2130", "departure_at": "2026-11-16T10:00:00+03:00", "return_at": "2026-11-24T12:00:00+03:00", "transfers": 0, "return_transfers": 0, "duration": 500, "link": "/search/MOW1611IST24111?t=y" },
+    "2026-11-17": { "origin": "MOW", "destination": "IST", "origin_airport": "SVO", "destination_airport": "IST", "price": 9800, "airline": "SU", "flight_number": "2132", "departure_at": "2026-11-17T10:00:00+03:00", "return_at": "2026-11-25T12:00:00+03:00", "transfers": 0, "return_transfers": 0, "duration": 500, "link": "/search/MOW1711IST25111?t=z" }
+  },
+  "currency": "rub"
+}
