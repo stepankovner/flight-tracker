@@ -5,7 +5,7 @@ import { planQueries, queryKey } from '../core/queryPlanner.ts';
 import type { Offer, User, WatchSpec } from '../core/types.ts';
 import type { SqlStatement } from '../db/sql.ts';
 import type { Services } from '../services.ts';
-import { decodeCache, encodeCache, mapLimit } from './checker.ts';
+import { decodeCache, encodeCache, isLastPage, mapLimit } from './checker.ts';
 
 export interface Preview {
   best: Offer | null;
@@ -45,7 +45,7 @@ export async function previewPrices(svc: Services, spec: WatchSpec, user: User, 
     try {
       const res = await svc.provider.search(q, 1, PROVIDER.PAGE_LIMIT);
       offers.push(...res.offers);
-      writes.push(svc.repo.stmtPutCache(queryKey(q), encodeCache(res.offers, 1, res.rawCount < PROVIDER.PAGE_LIMIT), now.toISOString()));
+      writes.push(svc.repo.stmtPutCache(queryKey(q), encodeCache(res.offers, 1, isLastPage(res.rawCount)), now.toISOString()));
     } catch (e) {
       complete = false;
       svc.log.warn('preview query failed', { error: String((e as Error)?.message) });

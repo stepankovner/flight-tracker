@@ -42,7 +42,9 @@ export class FakeProvider implements FareProvider {
     }
     const matching = this.offers.filter((o) => routeMatches(o, q)).sort((a, b) => a.price - b.price);
     const pageOffers = matching.slice((page - 1) * limit, page * limit);
-    return { offers: pageOffers, rawCount: pageOffers.length, bytes: 500 * pageOffers.length + 50 };
+    // как реальный API: на полной странице отдаёт чуть меньше limit (192 из 200)
+    const trimmed = pageOffers.length === limit ? pageOffers.slice(0, Math.floor(limit * 0.96)) : pageOffers;
+    return { offers: trimmed, rawCount: trimmed.length, bytes: 500 * trimmed.length + 50 };
   }
 
   async calendar(q: CalendarQuery): Promise<CalendarPoint[]> {

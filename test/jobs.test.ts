@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { estimateResponseBytes, isLastPage } from '../src/jobs/checker.ts';
 import { runDaily } from '../src/jobs/daily.ts';
 import { runInitialCheck } from '../src/jobs/manual.ts';
 import { backoffMinutes, runTick } from '../src/jobs/tick.ts';
@@ -218,6 +219,29 @@ describe('tick: бюджет и round-robin (SPEC §9)', () => {
     expect(r2.checks?.checked).toEqual(r1.checks?.deferred);
   });
 
+  it('CPU-бюджет: оценка объёма ответов ограничивает число watch за тик, но первый берётся всегда', async () => {
+    const { h, user } = await setup();
+    // 7 пар «месяц вылета × месяц возврата» × 150 КБ ≈ 1 МБ > 800 КБ — всё равно проверяется (иначе ждал бы вечно)
+    const huge = await h.watch(user.id, spec({ departFrom: '2026-10-01', departTo: '2027-01-20' }));
+    const small = await h.watch(user.id, spec({ destinations: ['AYT'] }));
+    const r1 = await runTick(h.svc());
+    expect(r1.checks?.checked).toEqual([huge]);
+    expect(r1.checks?.deferred).toEqual([small]);
+    h.advance(15);
+    const r2 = await runTick(h.svc());
+    expect(r2.checks?.checked).toEqual([small]);
+  });
+
+  it('страница, где записей чуть меньше limit, — не последняя', () => {
+    expect(isLastPage(192)).toBe(false);
+    expect(isLastPage(150)).toBe(false);
+    expect(isLastPage(149)).toBe(true);
+    expect(isLastPage(0)).toBe(true);
+    expect(estimateResponseBytes({ origin: 'MOW', destination: 'IST', departureAt: '2026-11', returnAt: null, oneWay: true, direct: false, currency: 'rub', market: 'ru' })).toBe(25_000);
+    expect(estimateResponseBytes({ origin: 'MOW', destination: 'IST', departureAt: '2026-11', returnAt: '2026-12', oneWay: false, direct: false, currency: 'rub', market: 'ru' })).toBe(150_000);
+    expect(estimateResponseBytes({ origin: 'MOW', destination: 'IST', departureAt: '2026-11-15', returnAt: '2026-12', oneWay: false, direct: false, currency: 'rub', market: 'ru' })).toBe(50_000);
+  });
+
   it('subrequests одного тика укладываются в лимит 50', async () => {
     const { h, user } = await setup();
     for (let i = 0; i < 20; i++) await h.watch(user.id, spec({ maxPrice: 20000 + i, departFrom: '2026-10-01', departTo: '2026-11-30' }));
@@ -261,6 +285,8 @@ describe('доставка: тихие часы, лимит, блокировк�
     await h.watch(user.id, spec({ destinations: ['AYT'] }));
     await h.watch(user.id, spec({ destinations: ['DXB'] }));
     h.provider.offers = [offer({ price: 9000 }), offer({ price: 9000, destAirport: 'AYT' }), offer({ price: 9000, destAirport: 'DXB' })];
+    await runTick(h.svc());
+    h.advance(15); // третий watch не влез в CPU-бюджет первого тика
     await runTick(h.svc());
     expect(h.messenger.texts().filter((t) => t.includes('💰'))).toHaveLength(1);
     expect(h.messenger.texts().filter((t) => t.includes('Дневной лимит'))).toHaveLength(1);

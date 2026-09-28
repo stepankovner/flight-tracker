@@ -91,6 +91,18 @@ interface CachePayload {
   done: boolean;
 }
 
+/** Страница последняя, если записей заметно меньше limit (API слегка недодаёт и на полных). */
+export function isLastPage(rawCount: number): boolean {
+  return rawCount < PROVIDER.PAGE_LIMIT * PROVIDER.PAGE_FULL_RATIO;
+}
+
+/** Оценка объёма первой страницы ответа по типу запроса (по замерам на реальном API). */
+export function estimateResponseBytes(q: FareQuery): number {
+  if (q.oneWay) return 25_000; // один билет на дату: ≤ 31 запись
+  const monthly = q.departureAt.length === 7 && (q.returnAt?.length ?? 0) === 7;
+  return monthly ? 150_000 : 50_000;
+}
+
 /** Кэш ответа провайдера: самые дешёвые CACHE_MAX_OFFERS офферов (нормализованные). */
 export function encodeCache(offers: Offer[], pages: number, done: boolean): string {
   const top = [...offers].sort((a, b) => a.price - b.price).slice(0, PROVIDER.CACHE_MAX_OFFERS);
@@ -186,6 +198,7 @@ export async function runChecks(deps: CheckDeps, targets: CheckTarget[], opts: C
   }
 
   // ---------- 2. Контекст и кэш одним batch ----------
+  let cachedBytes = 0;
   if (planned.length) {
     const watchIds = planned.map((p) => p.target.watch.id);
     const keys = [...states.keys()];
@@ -205,7 +218,9 @@ export async function runChecks(deps: CheckDeps, targets: CheckTarget[], opts: C
     }
     for (const r of res.slice(2).flatMap((x) => x.results)) {
       const st = states.get(String(r.cache_key));
-      const payload = decodeCache(String(r.payload));
+      const raw = String(r.payload);
+      cachedBytes += raw.length;
+      const payload = decodeCache(raw);
       // битый кэш — просто перезапросим
       if (st && payload) Object.assign(st, { offers: payload.offers, pages: payload.pages, done: payload.done, fromCache: true });
     }
@@ -213,16 +228,26 @@ export async function runChecks(deps: CheckDeps, targets: CheckTarget[], opts: C
   }
 
   // ---------- 3. Отбор watch под бюджет (кэшированные запросы бесплатны) ----------
+  // Первый watch берётся всегда (иначе широкий watch мог бы откладываться бесконечно),
+  // остальные — пока хватает бюджета запросов и оценочного объёма JSON (CPU).
   let apiUsed = 0;
+  let estimatedBytes = cachedBytes;
   const selectedKeys = new Set<string>();
   const accepted: Planned[] = [];
   for (const p of planned) {
     const fresh = p.keys.filter((k) => !states.get(k)!.fromCache && !selectedKeys.has(k));
+    const bytes = fresh.reduce((sum, k) => sum + estimateResponseBytes(states.get(k)!.query), 0);
+    const fits = selectedKeys.size + fresh.length <= opts.apiBudget && estimatedBytes + bytes <= opts.maxResponseBytes;
+    if (!fits && accepted.length > 0) {
+      report.deferred.push(p.target.watch.id);
+      continue;
+    }
     if (selectedKeys.size + fresh.length > opts.apiBudget) {
       report.deferred.push(p.target.watch.id);
       continue;
     }
     fresh.forEach((k) => selectedKeys.add(k));
+    estimatedBytes += bytes;
     accepted.push(p);
   }
   for (const [key, st] of states) {
@@ -233,8 +258,9 @@ export async function runChecks(deps: CheckDeps, targets: CheckTarget[], opts: C
     report.abort === null &&
     apiUsed < opts.apiBudget &&
     budget.remaining() > opts.reserveSubrequests &&
-    budget.responseBytes < opts.maxResponseBytes &&
     (opts.deadline === undefined || Date.now() < opts.deadline);
+  /** Догрузка страниц сверх первой — только пока не превышен объём JSON. */
+  const canSpendExtra = () => canSpend() && budget.responseBytes < opts.maxResponseBytes;
 
   const handleError = (e: unknown): ProviderError => {
     const pe = e instanceof ProviderError ? e : new ProviderError('bad_response', errorMessage(e));
@@ -254,7 +280,7 @@ export async function runChecks(deps: CheckDeps, targets: CheckTarget[], opts: C
 
   async function fetchPage(st: QueryState, page: number): Promise<void> {
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (!canSpend()) return stopQuery(st, page);
+      if (!(page === 1 ? canSpend() : canSpendExtra())) return stopQuery(st, page);
       apiUsed++;
       report.apiRequests++;
       try {
@@ -264,7 +290,7 @@ export async function runChecks(deps: CheckDeps, targets: CheckTarget[], opts: C
         st.pages = page;
         st.lastRawCount = res.rawCount;
         st.lastPrice = res.offers.length ? Math.max(...res.offers.map((o) => o.price)) : 0;
-        st.done = res.rawCount < PROVIDER.PAGE_LIMIT;
+        st.done = isLastPage(res.rawCount);
         return;
       } catch (e) {
         const pe = handleError(e);

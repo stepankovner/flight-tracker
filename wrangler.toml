@@ -13,7 +13,7 @@ crons = ["*/15 * * * *", "7 3 * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "farewatch"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "89af371e-2b59-4951-aee4-0695599650f6"
 migrations_dir = "migrations"
 
 [vars]
